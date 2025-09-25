@@ -27,7 +27,11 @@ dependencies = [
     "numpy",
     "openai>=1.108.2",
     "opencv-python",
+    "pdf2image>=1.17.0",
+    "pdfminer-six>=20250506",
+    "pi-heif>=1.1.0",
     "pillow>=11.3.0",
+    "pillow-heif>=1.1.0",
     "pydantic>=2.11.9",
     "pydantic-settings>=2.0.0",
     "pypdf2>=3.0.1",
@@ -37,6 +41,8 @@ dependencies = [
     "python-multipart>=0.0.20",
     "structlog",
     "unstructured",
+    "unstructured-inference>=1.0.5",
+    "unstructured-pytesseract>=0.3.15",
     "uvicorn>=0.36.0",
 ]
 

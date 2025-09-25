@@ -36,6 +36,9 @@ class Settings(BaseSettings):
     )
     temp_dir: str = Field(default="/tmp", env="TEMP_DIR")
     
+    # OCR Configuration
+    ocr_agent: Optional[str] = Field(default=None, env="OCR_AGENT")
+    
     # Logging Configuration
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     log_format: str = Field(default="json", env="LOG_FORMAT")

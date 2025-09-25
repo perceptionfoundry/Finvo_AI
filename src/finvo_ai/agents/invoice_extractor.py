@@ -221,50 +221,157 @@ class InvoiceExtractionAgent:
         """Create the system prompt for invoice extraction."""
         return """You are an expert financial document analysis AI specializing in invoice and receipt data extraction.
 
-Your task is to analyze the provided document content and extract structured financial information with high accuracy.
+Your task is to analyze the provided document content and extract ALL visible information with maximum accuracy, focusing on complete financial data for personal expense tracking.
 
-EXTRACTION REQUIREMENTS:
-1. Extract merchant/business information
-2. Extract transaction date and time
-3. Extract individual line items with quantities and prices
-4. Extract total amounts, taxes, and subtotals
-5. Identify payment methods
-6. Special attention to fuel/gas receipts (gallons, price per gallon, fuel type)
-7. Extract invoice/receipt numbers
-8. Categorize expenses appropriately
+CRITICAL REQUIREMENTS (IN ORDER OF IMPORTANCE):
 
-QUALITY STANDARDS:
-- Only extract information that is clearly visible and legible
-- Use null/None for missing or unclear information
-- Provide confidence scores based on text clarity and completeness
-- Handle multiple document pages if present
-- Normalize data formats (dates as YYYY-MM-DD, times as HH:MM)
+1. **TRANSACTION FINANCIALS (HIGHEST PRIORITY - MANDATORY)**:
+   - **TOTAL AMOUNT**: Find "TOTAL 8.18" patterns → extract 8.18 as total_amount
+   - **TAX AMOUNT**: Find "TAX 10.00% .074" patterns → extract 0.074 as tax_amount
+   - **SUBTOTAL**: Find "SUBTOTAL 7.44" patterns → extract 7.44 as subtotal  
+   - **DATE**: Find transaction/purchase date in ANY format
+   - **TIME**: Find transaction time (HH:MM or HH:MM:SS format)
+   
+   **EXTRACTION IS MANDATORY - DO NOT LEAVE NULL IF NUMBERS ARE VISIBLE**
+   
+2. **INDIVIDUAL ITEM PRICES (CRITICAL)**:
+   - Extract item name AND its corresponding price
+   - Look for patterns like "HAND TOWEL 2.97", "Item Name $5.99", "Product 1x $10.00"
+   - Find prices next to, above, or below item names
+   - Include unit prices, quantities, and total prices per item
+   - Examples: "HAND TOWEL" with price "2.97", "GATORADE" with price "1.50"
+   
+3. **LINE ITEMS EXTRACTION**: 
+   - Extract EVERY single item/product/service listed
+   - Include complete pricing information for each item
+   - Look for itemized sections, product lists, line-by-line breakdowns
+   
+4. **MERCHANT & TRANSACTION INFO**:
+   - Extract business name, location, addresses, phone numbers
+   - Extract invoice/receipt/transaction numbers
+   
+5. **PAYMENT INFORMATION**:
+   - Identify payment method (Interac, Visa, Cash, etc.)
+   - Extract last 4 digits of card if visible
 
-OUTPUT FORMAT:
-Return a valid JSON object matching the InvoiceData schema. Include confidence_score from 0.0 to 1.0 based on extraction accuracy and text quality.
+PRICE EXTRACTION PATTERNS:
+- **Adjacent Numbers**: "HAND TOWEL 2.97", "GATORADE 1.50"
+- **With Currency**: "ITEM $5.99", "Product CAD 10.00"
+- **Quantity Patterns**: "2x ITEM @ 3.50", "ITEM 1x 7.25"
+- **Columnar Layout**: Item name in one column, price in another
+- **Multiple Prices**: Unit price AND total price per item
 
-SPECIAL CONSIDERATIONS:
-- For fuel receipts: Extract gallons, price per gallon, and fuel type
-- For restaurants: Extract individual menu items when possible
-- For retail: Extract item names, quantities, and unit prices
-- Handle multi-currency transactions appropriately
-- Identify recurring charges or subscriptions"""
+MANDATORY FINANCIAL EXTRACTION PATTERNS:
+- **SUBTOTAL**: "SUBTOTAL 7.44", "Sub Total: 12.50", "Subtotal $15.99"
+- **TAX**: "TAX 10.00% .074", "GST: 1.25", "Tax Amount: 2.35", "HST 13%: 3.45"  
+- **TOTAL**: "TOTAL 8.18", "Total: $15.47", "Amount Due: $45.99", "AMOUNT: 23.50"
+- **ITEM PRICES**: "PEANUTS 2.46", "TOMATOES 4.98", "ITEM NAME price_number"
+
+CRITICAL EXTRACTION RULES:
+- **SCAN FOR NUMBERS**: Look for ANY decimal number that could be a price
+- **MATCH PATTERNS**: "SUBTOTAL 7.44" means subtotal = 7.44, "TOTAL 8.18" means total_amount = 8.18
+- **ITEM-PRICE ASSOCIATION**: "PEANUTS 2.46" means PEANUTS has unit_price = 2.46
+- **TAX PARSING**: "TAX 10.00% .074" means tax_amount = 0.074 (extract the final number)
+- **NEVER IGNORE FINANCIAL NUMBERS**: Every visible price/amount MUST be extracted
+
+SPECIFIC WALMART-STYLE PATTERNS:
+- Look for "SUBTOTAL [amount]" → extract the amount
+- Look for "TAX [percentage] [amount]" → extract the final amount
+- Look for "TOTAL [amount]" → extract the amount
+- Look for "[ITEM NAME] [price]" → extract both name and price
+
+SPECIAL HANDLING:
+- **Retail receipts**: Extract every item with its individual price
+- **Restaurant bills**: Get each menu item price, tax, and total
+- **Fuel receipts**: Gallons, price per gallon, total fuel cost
+- **Grocery receipts**: All food items with individual and total prices
+
+Return a valid JSON object with the "items" array populated with ALL extracted products/services.
+
+EXACT JSON SCHEMA FOR ITEMS:
+Each item in the "items" array must have these exact field names:
+- "item_name" (required): Product/service name
+- "quantity": Number of items (can be null)
+- "unit_price": Price per unit (can be null) 
+- "total_price": Total price for this item (can be null)
+- "category": Expense category from: food, fuel, utilities, transportation, groceries, entertainment, healthcare, shopping, services, other
+
+VALID CATEGORIES:
+- "food": Restaurant meals, snacks, beverages, prepared food
+- "groceries": Raw ingredients, supermarket items, household food
+- "shopping": Clothing, electronics, furniture, general retail
+- "fuel": Gasoline, diesel, car fuel
+- "transportation": Transit, parking, car services
+- "utilities": Electricity, water, internet, phone
+- "healthcare": Medical, pharmacy, personal care
+- "entertainment": Movies, games, recreation
+- "services": Professional services, repairs, maintenance
+- "other": Miscellaneous items
+
+EXAMPLE ITEM FORMAT:
+{{
+  "item_name": "HAND TOWEL",
+  "quantity": 1,
+  "unit_price": 5.99,
+  "total_price": 5.99,
+  "category": "shopping"
+}}
+
+USE "item_name" NOT "name" - This is critical for validation."""
     
     def _create_extraction_chain(self):
         """Create the LangChain extraction chain."""
         prompt = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt),
-            ("human", """Please extract all financial information from the following document content:
+            ("human", """EXTRACT COMPLETE FINANCIAL DATA FROM THIS RECEIPT/INVOICE:
 
 {document_content}
 
-Extraction Parameters:
-- Extract fuel information: {extract_fuel_info}
-- Extract line items: {extract_line_items}
+CRITICAL FINANCIAL EXTRACTION PRIORITIES:
 
-Document Metadata: {document_metadata}
+1. **MUST FIND THESE FINANCIAL VALUES** (DO NOT leave as null if visible):
+   - **transaction_date**: Any date on the receipt (purchase date, transaction date)
+   - **transaction_time**: Time of purchase/transaction  
+   - **total_amount**: Final total amount paid
+   - **tax_amount**: Tax/GST/HST amount
+   - **subtotal**: Amount before tax
 
-Return the extracted information as a JSON object matching the InvoiceData schema.""")
+2. **ITEM PRICING IS CRITICAL**: 
+   - For each item, find its price (e.g., "HAND TOWEL 2.97" means HAND TOWEL costs 2.97)
+   - Look for prices immediately after item names, in columns, or nearby
+   - Extract unit_price and total_price for each item when visible
+
+3. **EXTRACTION PARAMETERS**: 
+   - Extract fuel information: {extract_fuel_info}
+   - Extract line items: {extract_line_items}
+4. **DOCUMENT METADATA**: {document_metadata}
+
+EXACT PATTERNS YOU MUST EXTRACT:
+- "SUBTOTAL 7.44" → subtotal: 7.44
+- "TAX 10.00% .074" → tax_amount: 0.074 (use the final number after %)
+- "TOTAL 8.18" → total_amount: 8.18
+- "PEANUTS 2.46" → item "PEANUTS" with unit_price: 2.46
+- "TOMATOES 4.98" → item "TOMATOES" with unit_price: 4.98
+
+WALMART-STYLE RECEIPT PATTERNS:
+- Look for lines like "ITEM_NAME [space] PRICE_NUMBER"
+- Look for "SUBTOTAL [amount]", "TAX [percentage] [final_amount]", "TOTAL [amount]"
+- Extract the final number in tax lines (ignore percentage, get the actual tax amount)
+- Every item should have its price - look right after the item name
+
+**ZERO TOLERANCE FOR NULL FINANCIAL FIELDS** - If you see numbers that look like prices, extract them!
+
+CRITICAL FIELD MAPPING:
+Each item must use "item_name" (not "name") and follow this exact structure:
+{{
+  "item_name": "PRODUCT NAME HERE",
+  "quantity": number_or_null,
+  "unit_price": number_or_null,
+  "total_price": number_or_null,
+  "category": "category_or_null"
+}}
+
+Return the complete extracted information as a JSON object matching the InvoiceData schema with populated "items" array.""")
         ])
         
         return (

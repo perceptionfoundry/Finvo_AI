@@ -29,6 +29,7 @@ class PaymentMethod(str, Enum):
     MOBILE_PAYMENT = "mobile_payment"
     BANK_TRANSFER = "bank_transfer"
     CHECK = "check"
+    INTERAC = "interac"
     OTHER = "other"
 
 
@@ -69,6 +70,75 @@ class ExpenseItem(BaseModel):
         default=ExpenseCategory.OTHER,
         description="Category of expense"
     )
+    
+    @validator("category", pre=True)
+    def validate_category(cls, v) -> Optional[ExpenseCategory]:
+        """Validate and map category to valid enum values."""
+        if v is None:
+            return ExpenseCategory.OTHER
+        
+        if isinstance(v, ExpenseCategory):
+            return v
+            
+        # Convert to lowercase string for mapping
+        v_lower = str(v).lower().strip()
+        
+        # Category mappings for common variations
+        category_mappings = {
+            # Beverages
+            "beverage": ExpenseCategory.FOOD,
+            "beverages": ExpenseCategory.FOOD,
+            "drinks": ExpenseCategory.FOOD,
+            "drink": ExpenseCategory.FOOD,
+            
+            # Clothing
+            "clothing": ExpenseCategory.SHOPPING,
+            "clothes": ExpenseCategory.SHOPPING,
+            "apparel": ExpenseCategory.SHOPPING,
+            "fashion": ExpenseCategory.SHOPPING,
+            "accessories": ExpenseCategory.SHOPPING,
+            
+            # Stationery/Office
+            "stationery": ExpenseCategory.SHOPPING,
+            "office": ExpenseCategory.SHOPPING,
+            "office supplies": ExpenseCategory.SHOPPING,
+            "supplies": ExpenseCategory.SHOPPING,
+            
+            # Electronics
+            "electronics": ExpenseCategory.SHOPPING,
+            "tech": ExpenseCategory.SHOPPING,
+            "technology": ExpenseCategory.SHOPPING,
+            
+            # Personal care
+            "personal care": ExpenseCategory.HEALTHCARE,
+            "hygiene": ExpenseCategory.HEALTHCARE,
+            "beauty": ExpenseCategory.SHOPPING,
+            "cosmetics": ExpenseCategory.SHOPPING,
+            
+            # Home/Household
+            "household": ExpenseCategory.SHOPPING,
+            "home": ExpenseCategory.SHOPPING,
+            "furniture": ExpenseCategory.SHOPPING,
+            "appliances": ExpenseCategory.SHOPPING,
+            
+            # Restaurant/Dining
+            "restaurant": ExpenseCategory.FOOD,
+            "dining": ExpenseCategory.FOOD,
+            "takeout": ExpenseCategory.FOOD,
+            "fast food": ExpenseCategory.FOOD,
+        }
+        
+        # Check direct mappings first
+        if v_lower in category_mappings:
+            return category_mappings[v_lower]
+        
+        # Try to match enum values directly
+        for category in ExpenseCategory:
+            if v_lower == category.value.lower():
+                return category
+        
+        # If no match found, return OTHER
+        return ExpenseCategory.OTHER
 
 
 class FuelInfo(BaseModel):
@@ -156,25 +226,123 @@ class InvoiceData(BaseModel):
     
     @validator("transaction_date")
     def validate_transaction_date(cls, v: Optional[str]) -> Optional[str]:
-        """Validate date format."""
+        """Validate date format and normalize to YYYY-MM-DD."""
         if v is None:
             return v
-        try:
-            datetime.strptime(v, "%Y-%m-%d")
-            return v
-        except ValueError:
-            raise ValueError("Date must be in YYYY-MM-DD format")
+        
+        # Try different date formats and normalize to YYYY-MM-DD
+        date_formats = [
+            "%Y-%m-%d",      # 2023-12-25
+            "%m/%d/%Y",      # 12/25/2023
+            "%d/%m/%Y",      # 25/12/2023
+            "%m-%d-%Y",      # 12-25-2023
+            "%d-%m-%Y",      # 25-12-2023
+            "%Y/%m/%d",      # 2023/12/25
+            "%m/%d/%y",      # 12/25/23
+            "%d/%m/%y",      # 25/12/23
+            "%b %d, %Y",     # Dec 25, 2023
+            "%B %d, %Y",     # December 25, 2023
+            "%d %b %Y",      # 25 Dec 2023
+            "%d %B %Y",      # 25 December 2023
+        ]
+        
+        for fmt in date_formats:
+            try:
+                parsed_date = datetime.strptime(v, fmt)
+                return parsed_date.strftime("%Y-%m-%d")
+            except ValueError:
+                continue
+        
+        raise ValueError(f"Date format not recognized. Got: {v}. Expected common date formats")
     
     @validator("transaction_time")
     def validate_transaction_time(cls, v: Optional[str]) -> Optional[str]:
-        """Validate time format."""
+        """Validate time format and normalize to HH:MM."""
         if v is None:
             return v
-        try:
-            datetime.strptime(v, "%H:%M")
+        
+        # Clean and prepare the time string
+        v_clean = str(v).strip()
+        
+        # Try different time formats and normalize to HH:MM
+        time_formats = [
+            "%H:%M:%S",          # 13:30:45
+            "%H:%M",             # 13:30
+            "%I:%M:%S %p",       # 1:30:45 PM
+            "%I:%M %p",          # 1:30 PM
+            "%I:%M:%S%p",        # 1:30:45PM (no space)
+            "%I:%M%p",           # 1:30PM (no space)
+            "%H:%M:%S %p",       # 13:30:45 PM (sometimes mixed)
+            "%H:%M %p",          # 13:30 PM (sometimes mixed)
+        ]
+        
+        for fmt in time_formats:
+            try:
+                parsed_time = datetime.strptime(v_clean, fmt)
+                return parsed_time.strftime("%H:%M")
+            except ValueError:
+                continue
+        
+        # Try to handle edge cases by adding space before AM/PM
+        if any(suffix in v_clean.upper() for suffix in ['AM', 'PM']):
+            # Add space before AM/PM if missing: "05:52PM" -> "05:52 PM"
+            import re
+            v_with_space = re.sub(r'(\d+):(\d+)(AM|PM)', r'\1:\2 \3', v_clean, flags=re.IGNORECASE)
+            if v_with_space != v_clean:
+                for fmt in ["%I:%M %p", "%I:%M:%S %p"]:
+                    try:
+                        parsed_time = datetime.strptime(v_with_space, fmt)
+                        return parsed_time.strftime("%H:%M")
+                    except ValueError:
+                        continue
+        
+        raise ValueError(f"Time format not recognized. Got: {v}. Supported: HH:MM, HH:MM:SS, 12-hour with/without space")
+    
+    @validator("payment_method", pre=True)
+    def validate_payment_method(cls, v) -> Optional[PaymentMethod]:
+        """Validate payment method and handle case-insensitive matching."""
+        if v is None:
             return v
-        except ValueError:
-            raise ValueError("Time must be in HH:MM format")
+        
+        if isinstance(v, PaymentMethod):
+            return v
+            
+        # Convert to lowercase string for matching
+        v_lower = str(v).lower().strip()
+        
+        # Direct mapping for common variations
+        payment_mappings = {
+            "interac": PaymentMethod.INTERAC,
+            "visa": PaymentMethod.CREDIT_CARD,
+            "mastercard": PaymentMethod.CREDIT_CARD,
+            "amex": PaymentMethod.CREDIT_CARD,
+            "american express": PaymentMethod.CREDIT_CARD,
+            "discover": PaymentMethod.CREDIT_CARD,
+            "debit": PaymentMethod.DEBIT_CARD,
+            "credit": PaymentMethod.CREDIT_CARD,
+            "e-transfer": PaymentMethod.BANK_TRANSFER,
+            "etransfer": PaymentMethod.BANK_TRANSFER,
+            "wire": PaymentMethod.BANK_TRANSFER,
+            "apple pay": PaymentMethod.MOBILE_PAYMENT,
+            "google pay": PaymentMethod.MOBILE_PAYMENT,
+            "paypal": PaymentMethod.MOBILE_PAYMENT,
+            "venmo": PaymentMethod.MOBILE_PAYMENT,
+            "cash": PaymentMethod.CASH,
+            "cheque": PaymentMethod.CHECK,
+            "check": PaymentMethod.CHECK,
+        }
+        
+        # Check direct mappings first
+        if v_lower in payment_mappings:
+            return payment_mappings[v_lower]
+        
+        # Try to match enum values
+        for payment_method in PaymentMethod:
+            if v_lower == payment_method.value.lower():
+                return payment_method
+        
+        # If no match found, return OTHER
+        return PaymentMethod.OTHER
     
     @validator("currency")
     def validate_currency(cls, v: str) -> str:

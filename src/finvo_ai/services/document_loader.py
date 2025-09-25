@@ -14,6 +14,7 @@ from langchain_community.document_loaders import (
 from langchain_core.documents import Document
 from PIL import Image
 import numpy as np
+import pytesseract
 
 from src.finvo_ai.core.exceptions import (
     DocumentLoaderError,
@@ -172,11 +173,44 @@ class DocumentLoaderService:
             raise DocumentLoaderError(f"Failed to load PDF: {str(e)}") from e
     
     def _load_image(self, file_path: Path) -> List[Document]:
-        """Load image documents using LangChain image loader."""
+        """Load image documents using fast OCR approach."""
         try:
-            # Use UnstructuredImageLoader for better image processing
-            loader = UnstructuredImageLoader(str(file_path))
-            documents = loader.load()
+            # Start with direct Tesseract for speed - it's often the most reliable for receipts
+            logger.info("Starting with fast Tesseract OCR extraction", file_path=str(file_path))
+            
+            try:
+                tesseract_text = self._extract_with_tesseract(file_path)
+                if len(tesseract_text.strip()) > 20:  # If we got reasonable content
+                    logger.info("Direct Tesseract extraction successful", 
+                              content_length=len(tesseract_text.strip()))
+                    documents = [Document(
+                        page_content=tesseract_text,
+                        metadata={"source": str(file_path), "extraction_method": "tesseract"}
+                    )]
+                else:
+                    raise Exception("Insufficient text extracted from Tesseract")
+                    
+            except Exception as e:
+                logger.warning("Direct Tesseract failed, trying unstructured fallback", error=str(e))
+                
+                # Fallback to simple unstructured approach (no heavy models)
+                loader = UnstructuredImageLoader(
+                    str(file_path),
+                    strategy="fast",  # Fast processing, no heavy models
+                    languages=["eng"]  # Use languages instead of deprecated ocr_languages
+                )
+                documents = loader.load()
+                
+                if not documents or len(documents[0].page_content.strip()) < 10:
+                    # Last resort: try ocr_only strategy
+                    loader_final = UnstructuredImageLoader(
+                        str(file_path),
+                        strategy="ocr_only",
+                        languages=["eng"]
+                    )
+                    documents_final = loader_final.load()
+                    if documents_final and len(documents_final[0].page_content.strip()) > len(documents[0].page_content.strip() if documents else ""):
+                        documents = documents_final
             
             # Get image metadata
             image_metadata = self._get_image_metadata(file_path)
@@ -188,12 +222,54 @@ class DocumentLoaderService:
                     "file_type": "image",
                     **image_metadata
                 })
+                
+                # Log extracted content for debugging
+                logger.debug("Extracted text content", 
+                           file_path=str(file_path), 
+                           content_preview=doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
+                           content_length=len(doc.page_content))
             
             logger.info("Loaded image document", file_path=str(file_path), **image_metadata)
             return documents
             
         except Exception as e:
             raise DocumentLoaderError(f"Failed to load image: {str(e)}") from e
+    
+    def _extract_with_tesseract(self, file_path: Path) -> str:
+        """Extract text using direct Tesseract OCR with financial receipt optimizations."""
+        try:
+            # Open and preprocess image for better OCR
+            with Image.open(file_path) as img:
+                # Convert to grayscale for better OCR
+                if img.mode != 'L':
+                    img = img.convert('L')
+                
+                # Enhance contrast for better text recognition
+                import numpy as np
+                img_array = np.array(img)
+                # Simple contrast enhancement
+                img_array = np.clip(img_array * 1.2, 0, 255).astype(np.uint8)
+                img = Image.fromarray(img_array)
+                
+                # Configure Tesseract for financial documents
+                custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,$%:/-\n '
+                
+                # Extract text
+                text = pytesseract.image_to_string(img, config=custom_config)
+                
+                # Clean up the text
+                lines = [line.strip() for line in text.split('\n') if line.strip()]
+                cleaned_text = '\n'.join(lines)
+                
+                logger.debug("Direct Tesseract extraction completed", 
+                           extracted_lines=len(lines), 
+                           content_length=len(cleaned_text))
+                
+                return cleaned_text
+                
+        except Exception as e:
+            logger.error("Tesseract extraction failed", error=str(e))
+            return ""
     
     def _get_image_metadata(self, file_path: Path) -> Dict[str, Any]:
         """Extract metadata from image file."""
