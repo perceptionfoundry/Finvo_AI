@@ -12,11 +12,21 @@ from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 
-from src.finvo_ai.core.exceptions import ExtractionError, AIServiceError, ValidationError
-from src.finvo_ai.models.schemas import InvoiceData, ExtractionRequest
-from src.finvo_ai.services.document_loader import DocumentLoaderService
-from src.finvo_ai.utils.logger import get_logger
-from config.settings import settings
+from finvo_ai.core.exceptions import ExtractionError, AIServiceError, ValidationError
+from finvo_ai.models.schemas import InvoiceData, ExtractionRequest
+from finvo_ai.services.document_loader import DocumentLoaderService
+from finvo_ai.utils.logger import get_logger
+
+try:
+    from config.settings import settings
+except ImportError:
+    # Fallback settings for when config is not available
+    class Settings:
+        openai_model = "gpt-3.5-turbo"
+        openai_temperature = 0.1
+        max_tokens = 4000
+        openai_api_key = ""
+    settings = Settings()
 
 logger = get_logger(__name__)
 

@@ -15,12 +15,12 @@ from PIL import Image
 import numpy as np
 import pytesseract
 
-from src.finvo_ai.core.exceptions import (
+from finvo_ai.core.exceptions import (
     DocumentLoaderError,
     UnsupportedFileFormatError,
     FileSizeError
 )
-from src.finvo_ai.utils.logger import get_logger
+from finvo_ai.utils.logger import get_logger
 from config.settings import settings
 
 logger = get_logger(__name__)
@@ -175,20 +175,19 @@ class DocumentLoaderService:
             except Exception as e:
                 logger.warning("Direct Tesseract failed, trying unstructured fallback", error=str(e))
                 
-                # Fallback to simple unstructured approach (no heavy models)
+                # Fallback to simple unstructured approach (basic OCR)
                 loader = UnstructuredImageLoader(
                     str(file_path),
-                    strategy="fast",  # Fast processing, no heavy models
-                    languages=["eng"]  # Use languages instead of deprecated ocr_languages
+                    # Don't specify strategy, use default
+                    # languages=["eng"]  # Remove this as it might not be supported
                 )
                 documents = loader.load()
                 
                 if not documents or len(documents[0].page_content.strip()) < 10:
-                    # Last resort: try ocr_only strategy
+                    # Last resort: try with basic settings
                     loader_final = UnstructuredImageLoader(
-                        str(file_path),
-                        strategy="ocr_only",
-                        languages=["eng"]
+                        str(file_path)
+                        # Use minimal configuration
                     )
                     documents_final = loader_final.load()
                     if documents_final and len(documents_final[0].page_content.strip()) > len(documents[0].page_content.strip() if documents else ""):

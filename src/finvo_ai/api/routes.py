@@ -7,20 +7,20 @@ from pathlib import Path
 from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import JSONResponse
 
-from src.finvo_ai.agents.invoice_extractor import InvoiceExtractionAgent
-from src.finvo_ai.models.schemas import (
+from finvo_ai.agents.invoice_extractor import InvoiceExtractionAgent
+from finvo_ai.models.schemas import (
     InvoiceData,
     ExtractionRequest,
     ExtractionResponse,
     ErrorDetails
 )
-from src.finvo_ai.core.exceptions import (
+from finvo_ai.core.exceptions import (
     FinvoAIException,
     UnsupportedFileFormatError,
     FileSizeError,
     ExtractionError
 )
-from src.finvo_ai.utils.logger import get_logger
+from finvo_ai.utils.logger import get_logger
 from config.settings import settings
 
 logger = get_logger(__name__)
