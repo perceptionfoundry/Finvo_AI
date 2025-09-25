@@ -236,36 +236,88 @@ class DocumentLoaderService:
             raise DocumentLoaderError(f"Failed to load image: {str(e)}") from e
     
     def _extract_with_tesseract(self, file_path: Path) -> str:
-        """Extract text using direct Tesseract OCR with financial receipt optimizations."""
+        """Extract text using direct Tesseract OCR with multiple strategies for logo text."""
         try:
-            # Open and preprocess image for better OCR
+            all_text_parts = []
+            
+            # Open and preprocess image
             with Image.open(file_path) as img:
-                # Convert to grayscale for better OCR
+                original_img = img.copy()
+                
+                # Strategy 1: Standard OCR for regular text
                 if img.mode != 'L':
-                    img = img.convert('L')
+                    img_gray = img.convert('L')
+                else:
+                    img_gray = img.copy()
                 
-                # Enhance contrast for better text recognition
+                # Enhance contrast for regular text
                 import numpy as np
-                img_array = np.array(img)
-                # Simple contrast enhancement
+                img_array = np.array(img_gray)
                 img_array = np.clip(img_array * 1.2, 0, 255).astype(np.uint8)
-                img = Image.fromarray(img_array)
+                img_enhanced = Image.fromarray(img_array)
                 
-                # Configure Tesseract for financial documents
-                custom_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,$%:/-\n '
+                # Standard OCR config
+                standard_config = r'--oem 3 --psm 6 -c tessedit_char_whitelist=0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz.,$%:/-\n '
+                standard_text = pytesseract.image_to_string(img_enhanced, config=standard_config)
+                all_text_parts.append(("standard", standard_text))
                 
-                # Extract text
-                text = pytesseract.image_to_string(img, config=custom_config)
+                # Strategy 2: Logo/Header focused OCR (top portion of image)
+                try:
+                    width, height = original_img.size
+                    # Extract top 25% of image where logos/merchant names usually are
+                    top_region = original_img.crop((0, 0, width, height // 4))
+                    
+                    # Convert to grayscale and enhance for logo text
+                    if top_region.mode != 'L':
+                        top_region = top_region.convert('L')
+                    
+                    # More aggressive processing for logo text
+                    top_array = np.array(top_region)
+                    
+                    # High contrast enhancement for logos
+                    top_array = np.clip(top_array * 1.5, 0, 255).astype(np.uint8)
+                    
+                    # Threshold to make text more prominent
+                    threshold = 128
+                    top_array = np.where(top_array > threshold, 255, 0).astype(np.uint8)
+                    
+                    top_processed = Image.fromarray(top_array)
+                    
+                    # OCR config optimized for logo text (more permissive)
+                    logo_config = r'--oem 3 --psm 8 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&-.\n '
+                    logo_text = pytesseract.image_to_string(top_processed, config=logo_config)
+                    all_text_parts.append(("logo_region", logo_text))
+                    
+                except Exception as e:
+                    logger.debug("Logo region extraction failed", error=str(e))
                 
-                # Clean up the text
-                lines = [line.strip() for line in text.split('\n') if line.strip()]
-                cleaned_text = '\n'.join(lines)
+                # Strategy 3: Try different PSM modes for challenging text
+                try:
+                    # PSM 7: Single text line (good for merchant names in logos)
+                    single_line_config = r'--oem 3 --psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789&-.\n '
+                    single_line_text = pytesseract.image_to_string(img_enhanced, config=single_line_config)
+                    all_text_parts.append(("single_line", single_line_text))
+                    
+                except Exception as e:
+                    logger.debug("Single line extraction failed", error=str(e))
                 
-                logger.debug("Direct Tesseract extraction completed", 
-                           extracted_lines=len(lines), 
-                           content_length=len(cleaned_text))
+                # Combine all extraction results
+                combined_lines = []
+                for strategy, text in all_text_parts:
+                    lines = [line.strip() for line in text.split('\n') if line.strip()]
+                    for line in lines:
+                        if line not in combined_lines:  # Avoid duplicates
+                            combined_lines.append(line)
+                    logger.debug(f"Strategy '{strategy}' extracted {len(lines)} lines")
                 
-                return cleaned_text
+                combined_text = '\n'.join(combined_lines)
+                
+                logger.debug("Multi-strategy Tesseract extraction completed", 
+                           total_strategies=len(all_text_parts),
+                           extracted_lines=len(combined_lines), 
+                           content_length=len(combined_text))
+                
+                return combined_text
                 
         except Exception as e:
             logger.error("Tesseract extraction failed", error=str(e))

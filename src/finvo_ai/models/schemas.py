@@ -209,7 +209,7 @@ class InvoiceData(BaseModel):
         description="Payment method used"
     )
     currency: str = Field(
-        default="USD",
+        default="CAD",
         description="Currency of the transaction",
         max_length=3
     )

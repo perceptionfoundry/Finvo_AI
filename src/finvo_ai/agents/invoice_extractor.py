@@ -246,11 +246,19 @@ CRITICAL REQUIREMENTS (IN ORDER OF IMPORTANCE):
    - Include complete pricing information for each item
    - Look for itemized sections, product lists, line-by-line breakdowns
    
-4. **MERCHANT & TRANSACTION INFO**:
-   - Extract business name, location, addresses, phone numbers
+4. **MERCHANT NAME EXTRACTION (CRITICAL)**:
+   - **PRIMARY FOCUS**: Look for business/store names at the TOP of receipts
+   - **LOGO TEXT**: Merchant names are often in logos or large stylized text
+   - **COMMON LOCATIONS**: Usually first line, header, or prominently displayed
+   - **EXAMPLES**: "WALMART", "TARGET", "STARBUCKS", "McDONALD'S", "HOME DEPOT"
+   - **PATTERNS**: Look for known retailer names, even if partially visible
+   - **NEVER leave merchant_name as null if ANY business name is visible**
+   
+5. **MERCHANT & TRANSACTION INFO**:
+   - Extract business locations, addresses, phone numbers
    - Extract invoice/receipt/transaction numbers
    
-5. **PAYMENT INFORMATION**:
+6. **PAYMENT INFORMATION**:
    - Identify payment method (Interac, Visa, Cash, etc.)
    - Extract last 4 digits of card if visible
 
@@ -329,7 +337,8 @@ USE "item_name" NOT "name" - This is critical for validation."""
 
 CRITICAL FINANCIAL EXTRACTION PRIORITIES:
 
-1. **MUST FIND THESE FINANCIAL VALUES** (DO NOT leave as null if visible):
+1. **MUST FIND THESE CRITICAL VALUES** (DO NOT leave as null if visible):
+   - **merchant_name**: Business name (often in logo/header) - "WALMART", "TARGET", etc.
    - **transaction_date**: Any date on the receipt (purchase date, transaction date)
    - **transaction_time**: Time of purchase/transaction  
    - **total_amount**: Final total amount paid
@@ -347,11 +356,18 @@ CRITICAL FINANCIAL EXTRACTION PRIORITIES:
 4. **DOCUMENT METADATA**: {document_metadata}
 
 EXACT PATTERNS YOU MUST EXTRACT:
+- "WALMART" or "Walmart" (often in logo) → merchant_name: "Walmart" 
 - "SUBTOTAL 7.44" → subtotal: 7.44
 - "TAX 10.00% .074" → tax_amount: 0.074 (use the final number after %)
 - "TOTAL 8.18" → total_amount: 8.18
 - "PEANUTS 2.46" → item "PEANUTS" with unit_price: 2.46
 - "TOMATOES 4.98" → item "TOMATOES" with unit_price: 4.98
+
+MERCHANT NAME DETECTION:
+- Look at the VERY TOP of the receipt text
+- Merchant names are usually the first or second line
+- May appear as "WALMART", "Walmart", or similar variations
+- Check for any recognizable business/store names
 
 WALMART-STYLE RECEIPT PATTERNS:
 - Look for lines like "ITEM_NAME [space] PRICE_NUMBER"
