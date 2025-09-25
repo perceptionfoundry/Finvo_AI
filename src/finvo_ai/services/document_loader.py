@@ -1,6 +1,5 @@
 """Professional document loading service using LangChain."""
 
-import base64
 import tempfile
 from io import BytesIO
 from pathlib import Path
@@ -133,23 +132,6 @@ class DocumentLoaderService:
         finally:
             # Clean up temporary file
             temp_path.unlink(missing_ok=True)
-    
-    def load_from_base64(self, base64_data: str, filename: str) -> List[Document]:
-        """
-        Load documents from base64 encoded data.
-        
-        Args:
-            base64_data: Base64 encoded file content
-            filename: Original filename
-            
-        Returns:
-            List of LangChain Document objects
-        """
-        try:
-            file_bytes = base64.b64decode(base64_data)
-            return self.load_from_bytes(file_bytes, filename)
-        except Exception as e:
-            raise DocumentLoaderError(f"Failed to decode base64 data: {str(e)}") from e
     
     def _load_pdf(self, file_path: Path) -> List[Document]:
         """Load PDF documents using LangChain PDF loader."""

@@ -147,36 +147,6 @@ class InvoiceExtractionAgent:
             )
             raise ExtractionError(f"Failed to extract data from bytes: {str(e)}") from e
     
-    def extract_from_base64(
-        self, 
-        base64_data: str, 
-        filename: str, 
-        request: Optional[ExtractionRequest] = None
-    ) -> InvoiceData:
-        """
-        Extract invoice data from base64 encoded file.
-        
-        Args:
-            base64_data: Base64 encoded file content
-            filename: Original filename
-            request: Optional extraction request parameters
-            
-        Returns:
-            Extracted invoice data
-        """
-        try:
-            documents = self.document_loader.load_from_base64(base64_data, filename)
-            return self._process_documents(documents, request)
-            
-        except Exception as e:
-            logger.error(
-                "Base64 extraction failed",
-                filename=filename,
-                error=str(e),
-                exc_info=True
-            )
-            raise ExtractionError(f"Failed to extract data from base64: {str(e)}") from e
-    
     def _process_documents(
         self, 
         documents: List[Document], 

@@ -93,23 +93,6 @@ class TestInvoiceExtractionAgent:
             assert result.merchant_name == "Test Store"
             mock_process.assert_called_once()
     
-    @patch('src.finvo_ai.agents.invoice_extractor.DocumentLoaderService')
-    def test_extract_from_base64_success(self, mock_loader, agent, sample_invoice_data):
-        """Test successful base64 extraction."""
-        mock_documents = [Mock(page_content="test content", metadata={"source": "test.png"})]
-        mock_loader.return_value.load_from_base64.return_value = mock_documents
-        
-        with patch.object(agent, '_process_documents') as mock_process:
-            mock_result = InvoiceData(**sample_invoice_data)
-            mock_process.return_value = mock_result
-            
-            # Test
-            result = agent.extract_from_base64("fake_base64_data", "test.png")
-            
-            # Assertions
-            assert isinstance(result, InvoiceData)
-            assert result.merchant_name == "Test Store"
-    
     def test_process_documents_empty_list(self, agent):
         """Test processing empty document list."""
         with pytest.raises(ExtractionError) as exc_info:

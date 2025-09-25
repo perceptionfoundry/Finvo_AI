@@ -53,7 +53,7 @@ uv run uvicorn app:app --host 0.0.0.0 --port 8000
 
 ### API Endpoints
 
-#### Upload File Extraction
+#### File Upload Extraction
 ```bash
 curl -X POST "http://localhost:8000/api/v1/extract/upload" \
      -H "accept: application/json" \
@@ -61,18 +61,6 @@ curl -X POST "http://localhost:8000/api/v1/extract/upload" \
      -F "file=@invoice.pdf" \
      -F "extract_fuel_info=true" \
      -F "extract_line_items=true"
-```
-
-#### Base64 Image Extraction
-```bash
-curl -X POST "http://localhost:8000/api/v1/extract/base64" \
-     -H "Content-Type: application/json" \
-     -d '{
-       "image_data": "base64_encoded_image",
-       "filename": "receipt.jpg",
-       "extract_fuel_info": true,
-       "extract_line_items": true
-     }'
 ```
 
 ### Response Format
