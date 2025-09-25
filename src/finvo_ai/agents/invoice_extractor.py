@@ -219,7 +219,7 @@ class InvoiceExtractionAgent:
     
     def _create_system_prompt(self) -> str:
         """Create the system prompt for invoice extraction."""
-        return \"\"\"You are an expert financial document analysis AI specializing in invoice and receipt data extraction.
+        return """You are an expert financial document analysis AI specializing in invoice and receipt data extraction.
 
 Your task is to analyze the provided document content and extract structured financial information with high accuracy.
 
@@ -248,13 +248,13 @@ SPECIAL CONSIDERATIONS:
 - For restaurants: Extract individual menu items when possible
 - For retail: Extract item names, quantities, and unit prices
 - Handle multi-currency transactions appropriately
-- Identify recurring charges or subscriptions\"\"\"
+- Identify recurring charges or subscriptions"""
     
     def _create_extraction_chain(self):
-        \"\"\"Create the LangChain extraction chain.\"\"\"
+        """Create the LangChain extraction chain."""
         prompt = ChatPromptTemplate.from_messages([
             ("system", self.system_prompt),
-            ("human", \"\"\"Please extract all financial information from the following document content:
+            ("human", """Please extract all financial information from the following document content:
 
 {document_content}
 
@@ -264,7 +264,7 @@ Extraction Parameters:
 
 Document Metadata: {document_metadata}
 
-Return the extracted information as a JSON object matching the InvoiceData schema.\"\"\")
+Return the extracted information as a JSON object matching the InvoiceData schema.""")
         ])
         
         return (
@@ -278,7 +278,7 @@ Return the extracted information as a JSON object matching the InvoiceData schem
         )
     
     def _validate_result(self, result: Dict[str, Any]) -> InvoiceData:
-        \"\"\"Validate and convert extraction result to InvoiceData.\"\"\"
+        """Validate and convert extraction result to InvoiceData."""
         try:
             # Handle the case where result might be wrapped in additional structure
             if isinstance(result, dict) and "data" in result:
@@ -303,5 +303,5 @@ Return the extracted information as a JSON object matching the InvoiceData schem
             raise ValidationError(f"Failed to validate extraction result: {str(e)}") from e
     
     def get_supported_formats(self) -> List[str]:
-        \"\"\"Get list of supported file formats.\"\"\"
-        return self.document_loader.get_supported_formats()\"
+        """Get list of supported file formats."""
+        return self.document_loader.get_supported_formats()

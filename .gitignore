@@ -1,1 +1,11 @@
 .env
+/src/__pycache__
+/src/finvo_ai/__pycache__
+/src/finvo_ai/agents/__pycache__
+/src/finvo_ai/api/__pycache__
+/src/finvo_ai/core/__pycache__
+/src/finvo_ai/models/__pycache__
+/src/finvo_ai/services/__pycache__
+/src/finvo_ai/utils/__pycache__
+/__pycache__
+/config/__pycache__

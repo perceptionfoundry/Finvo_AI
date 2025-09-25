@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     log_file: Optional[str] = Field(default=None, env="LOG_FILE")
     
     # LangChain Configuration
+    langchain_api_key: Optional[str] = Field(default=None, env="LANGCHAIN_API_KEY")
     langchain_verbose: bool = Field(default=False, env="LANGCHAIN_VERBOSE")
     langchain_cache: bool = Field(default=True, env="LANGCHAIN_CACHE")
     
