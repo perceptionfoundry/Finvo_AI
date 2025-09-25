@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import List, Optional
 from enum import Enum
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class ExpenseCategory(str, Enum):
@@ -71,7 +71,8 @@ class ExpenseItem(BaseModel):
         description="Category of expense"
     )
     
-    @validator("category", pre=True)
+    @field_validator("category", mode="before")
+    @classmethod
     def validate_category(cls, v) -> Optional[ExpenseCategory]:
         """Validate and map category to valid enum values."""
         if v is None:
@@ -224,7 +225,8 @@ class InvoiceData(BaseModel):
         description="Metadata about the processing"
     )
     
-    @validator("transaction_date")
+    @field_validator("transaction_date")
+    @classmethod
     def validate_transaction_date(cls, v: Optional[str]) -> Optional[str]:
         """Validate date format and normalize to YYYY-MM-DD."""
         if v is None:
@@ -255,7 +257,8 @@ class InvoiceData(BaseModel):
         
         raise ValueError(f"Date format not recognized. Got: {v}. Expected common date formats")
     
-    @validator("transaction_time")
+    @field_validator("transaction_time")
+    @classmethod
     def validate_transaction_time(cls, v: Optional[str]) -> Optional[str]:
         """Validate time format and normalize to HH:MM."""
         if v is None:
@@ -298,7 +301,8 @@ class InvoiceData(BaseModel):
         
         raise ValueError(f"Time format not recognized. Got: {v}. Supported: HH:MM, HH:MM:SS, 12-hour with/without space")
     
-    @validator("payment_method", pre=True)
+    @field_validator("payment_method", mode="before")
+    @classmethod
     def validate_payment_method(cls, v) -> Optional[PaymentMethod]:
         """Validate payment method and handle case-insensitive matching."""
         if v is None:
@@ -344,7 +348,8 @@ class InvoiceData(BaseModel):
         # If no match found, return OTHER
         return PaymentMethod.OTHER
     
-    @validator("currency")
+    @field_validator("currency")
+    @classmethod
     def validate_currency(cls, v: str) -> str:
         """Validate currency code."""
         return v.upper()

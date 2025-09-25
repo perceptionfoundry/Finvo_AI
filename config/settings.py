@@ -4,7 +4,7 @@ import os
 from pathlib import Path
 from typing import List, Optional
 
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings
 
 
@@ -49,14 +49,16 @@ class Settings(BaseSettings):
     langchain_verbose: bool = Field(default=False, env="LANGCHAIN_VERBOSE")
     langchain_cache: bool = Field(default=True, env="LANGCHAIN_CACHE")
     
-    @validator("openai_api_key")
+    @field_validator("openai_api_key")
+    @classmethod
     def validate_openai_api_key(cls, v: str) -> str:
         """Validate OpenAI API key format."""
         if not v or not v.startswith("sk-"):
             raise ValueError("Invalid OpenAI API key format")
         return v
     
-    @validator("log_level")
+    @field_validator("log_level")
+    @classmethod
     def validate_log_level(cls, v: str) -> str:
         """Validate log level."""
         valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
@@ -64,7 +66,8 @@ class Settings(BaseSettings):
             raise ValueError(f"Log level must be one of: {valid_levels}")
         return v.upper()
     
-    @validator("environment")
+    @field_validator("environment")
+    @classmethod
     def validate_environment(cls, v: str) -> str:
         """Validate environment."""
         valid_envs = ["development", "staging", "production"]
