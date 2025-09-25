@@ -11,7 +11,8 @@ from src.finvo_ai.agents.invoice_extractor import InvoiceExtractionAgent
 from src.finvo_ai.models.schemas import (
     InvoiceData,
     ExtractionRequest,
-    ExtractionResponse
+    ExtractionResponse,
+    ErrorDetails
 )
 from src.finvo_ai.core.exceptions import (
     FinvoAIException,
@@ -143,14 +144,49 @@ async def extract_from_upload(
             error_code=e.error_code
         )
         
+        processing_time = time.time() - start_time
+        
+        # Determine error category and HTTP status
         if isinstance(e, UnsupportedFileFormatError):
-            raise HTTPException(status_code=400, detail=str(e))
+            status_code = 400
+            error_category = "UNSUPPORTED_FORMAT"
         elif isinstance(e, FileSizeError):
-            raise HTTPException(status_code=413, detail=str(e))
+            status_code = 413
+            error_category = "FILE_TOO_LARGE"
         elif isinstance(e, ExtractionError):
-            raise HTTPException(status_code=422, detail=str(e))
+            status_code = 422
+            error_category = "EXTRACTION_FAILED"
         else:
-            raise HTTPException(status_code=500, detail=str(e))
+            status_code = 500
+            error_category = "UNKNOWN_ERROR"
+        
+        # Return structured error response
+        error_response = ExtractionResponse(
+            status="error",
+            data=None,
+            error=ErrorDetails(
+                message=str(e),
+                category=error_category,
+                code=getattr(e, 'error_code', None),
+                details={
+                    "filename": file.filename,
+                    "file_size": len(file_content) if 'file_content' in locals() else None,
+                    "processing_time": processing_time
+                }
+            ),
+            processing_time=processing_time,
+            file_info={
+                "filename": file.filename,
+                "size": len(file_content) if 'file_content' in locals() else None,
+                "format": Path(file.filename).suffix.lower() if file.filename else None,
+                "content_type": file.content_type
+            }
+        )
+        
+        return JSONResponse(
+            status_code=status_code,
+            content=error_response.model_dump()
+        )
     
     except Exception as e:
         logger.error(
@@ -159,7 +195,37 @@ async def extract_from_upload(
             error=str(e),
             exc_info=True
         )
-        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
+        
+        processing_time = time.time() - start_time
+        
+        # Return structured error response for unexpected errors
+        error_response = ExtractionResponse(
+            status="error",
+            data=None,
+            error=ErrorDetails(
+                message=f"Unexpected processing error: {str(e)}",
+                category="SYSTEM_ERROR",
+                code="UNEXPECTED_ERROR",
+                details={
+                    "filename": file.filename if file.filename else "unknown",
+                    "file_size": len(file_content) if 'file_content' in locals() else None,
+                    "processing_time": processing_time,
+                    "error_type": type(e).__name__
+                }
+            ),
+            processing_time=processing_time,
+            file_info={
+                "filename": file.filename if file.filename else "unknown",
+                "size": len(file_content) if 'file_content' in locals() else None,
+                "format": Path(file.filename).suffix.lower() if file.filename else None,
+                "content_type": getattr(file, 'content_type', None)
+            }
+        )
+        
+        return JSONResponse(
+            status_code=500,
+            content=error_response.model_dump()
+        )
 
 
 @router.post("/extract/base64", response_model=ExtractionResponse)
@@ -227,10 +293,42 @@ async def extract_from_base64(request: Dict[str, Any]):
             error_code=e.error_code
         )
         
+        processing_time = time.time() - start_time
+        filename = request.get("filename", "unknown")
+        
+        # Determine error category and HTTP status
         if isinstance(e, ExtractionError):
-            raise HTTPException(status_code=422, detail=str(e))
+            status_code = 422
+            error_category = "EXTRACTION_FAILED"
         else:
-            raise HTTPException(status_code=500, detail=str(e))
+            status_code = 500
+            error_category = "UNKNOWN_ERROR"
+        
+        # Return structured error response
+        error_response = ExtractionResponse(
+            status="error",
+            data=None,
+            error=ErrorDetails(
+                message=str(e),
+                category=error_category,
+                code=getattr(e, 'error_code', None),
+                details={
+                    "filename": filename,
+                    "input_type": "base64",
+                    "processing_time": processing_time
+                }
+            ),
+            processing_time=processing_time,
+            file_info={
+                "filename": filename,
+                "format": "base64_encoded"
+            }
+        )
+        
+        return JSONResponse(
+            status_code=status_code,
+            content=error_response.model_dump()
+        )
     
     except Exception as e:
         logger.error(
@@ -239,7 +337,36 @@ async def extract_from_base64(request: Dict[str, Any]):
             error=str(e),
             exc_info=True
         )
-        raise HTTPException(status_code=500, detail=f"Processing error: {str(e)}")
+        
+        processing_time = time.time() - start_time
+        filename = request.get("filename", "unknown")
+        
+        # Return structured error response for unexpected errors
+        error_response = ExtractionResponse(
+            status="error",
+            data=None,
+            error=ErrorDetails(
+                message=f"Unexpected processing error: {str(e)}",
+                category="SYSTEM_ERROR",
+                code="UNEXPECTED_ERROR",
+                details={
+                    "filename": filename,
+                    "input_type": "base64",
+                    "processing_time": processing_time,
+                    "error_type": type(e).__name__
+                }
+            ),
+            processing_time=processing_time,
+            file_info={
+                "filename": filename,
+                "format": "base64_encoded"
+            }
+        )
+        
+        return JSONResponse(
+            status_code=500,
+            content=error_response.model_dump()
+        )
 
 
 @router.get("/stats")

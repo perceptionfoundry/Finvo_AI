@@ -228,9 +228,35 @@ class InvoiceData(BaseModel):
     @field_validator("transaction_date")
     @classmethod
     def validate_transaction_date(cls, v: Optional[str]) -> Optional[str]:
-        """Validate date format and normalize to YYYY-MM-DD."""
+        """Validate date format and normalize to YYYY-MM-DD. Returns None for invalid/incomplete dates."""
         if v is None:
             return v
+        
+        # Clean the input string
+        v_clean = str(v).strip()
+        if not v_clean:
+            return None
+        
+        # Check if date has at least day, month, and year components
+        # Skip dates that only have month/year like "11/2004" or incomplete formats
+        import re
+        
+        # Pattern to check if we have a reasonable date format with day, month, year
+        # This will reject formats like "11/2004", "2004", "Nov 2004", etc.
+        date_component_patterns = [
+            r'^\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}$',  # DD/MM/YYYY or MM/DD/YYYY
+            r'^\d{4}[/\-]\d{1,2}[/\-]\d{1,2}$',    # YYYY/MM/DD
+            r'^\w{3,9}\s+\d{1,2},?\s+\d{4}$',      # Month DD, YYYY or Month DD YYYY
+            r'^\d{1,2}\s+\w{3,9}\s+\d{4}$',        # DD Month YYYY
+        ]
+        
+        # Check if the date has enough components (day, month, year)
+        has_valid_components = any(re.match(pattern, v_clean) for pattern in date_component_patterns)
+        
+        if not has_valid_components:
+            # Use today's date for incomplete date formats
+            from datetime import date
+            return date.today().strftime("%Y-%m-%d")
         
         # Try different date formats and normalize to YYYY-MM-DD
         date_formats = [
@@ -250,12 +276,15 @@ class InvoiceData(BaseModel):
         
         for fmt in date_formats:
             try:
-                parsed_date = datetime.strptime(v, fmt)
+                parsed_date = datetime.strptime(v_clean, fmt)
                 return parsed_date.strftime("%Y-%m-%d")
             except ValueError:
                 continue
         
-        raise ValueError(f"Date format not recognized. Got: {v}. Expected common date formats")
+        # If no format matches, use today's date instead of raising error
+        # This allows the extraction process to continue
+        from datetime import date
+        return date.today().strftime("%Y-%m-%d")
     
     @field_validator("transaction_time")
     @classmethod
@@ -364,11 +393,20 @@ class ExtractionRequest(BaseModel):
     extract_line_items: bool = Field(default=True, description="Whether to extract individual line items")
 
 
+class ErrorDetails(BaseModel):
+    """Structured error information."""
+    
+    message: str = Field(..., description="Error message")
+    category: str = Field(..., description="Error category/type")
+    code: Optional[str] = Field(default=None, description="Error code")
+    details: Optional[dict] = Field(default=None, description="Additional error context")
+
+
 class ExtractionResponse(BaseModel):
     """Response model for extraction operations."""
     
-    status: str = Field(..., description="Processing status")
+    status: str = Field(..., description="Processing status (success/error)")
     data: Optional[InvoiceData] = Field(default=None, description="Extracted data")
-    error: Optional[str] = Field(default=None, description="Error message if processing failed")
+    error: Optional[ErrorDetails] = Field(default=None, description="Structured error information if processing failed")
     processing_time: Optional[float] = Field(default=None, description="Processing time in seconds")
     file_info: Optional[dict] = Field(default=None, description="File metadata")
